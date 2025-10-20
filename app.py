@@ -1,27 +1,40 @@
+import sys, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import streamlit as st
+from certus.utils.layout import render_header, render_kpis, section, footer
 
-st.set_page_config(page_title="Certus", page_icon="📈", layout="wide")
+st.set_page_config(
+    page_title="Certus",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-# Sidebar
-st.sidebar.title("Certus")
-st.sidebar.caption("TrendLab Intelligence Engine")
-st.sidebar.markdown("---")
-st.sidebar.success("P0 → P1 Shell ready")
+with st.sidebar:
+    st.title("Certus")
+    st.caption("TrendLab Intelligence Engine")
+    st.markdown("---")
+    st.success("P0 ✅  •  P1 (Shell) in progress")
+    st.markdown("**Pages** live under the left “Pages” icon (📄).")
 
-# Header
-st.title("📈 Certus — TrendLab Intelligence Engine")
-st.write("This is the dashboard shell. Data connectors will arrive in P2.")
+render_header(
+    "Certus — TrendLab Intelligence Engine",
+    "Unified analytics across crypto & equities. P1 focuses on structure; P2 adds data.",
+)
 
-# Layout example
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("Tracked Assets", "—")
-with col2:
-    st.metric("Signals (24h)", "—")
-with col3:
-    st.metric("Uptime", "Online")
+render_kpis(
+    {
+        "Tracked Assets": "—",
+        "Signals (24h)": "—",
+        "Uptime": "Online",
+    }
+)
 
-st.markdown("### Quick Notes")
-st.info("Use the sidebar to navigate pages. Crypto/Stocks pages are placeholders.")
+section("Quick Notes")
+st.info("Use the **Pages** panel (left) to open **Crypto** and **Stocks**. "
+        "These are structured placeholders ready for data in P2.")
+
 st.markdown("---")
-st.markdown("Next steps: add CoinGecko (P2), indicators & Trend Score (P3).")
+st.markdown("**Next:** Add CoinGecko (P2) and indicators/Trend Score (P3).")
+
+footer()
