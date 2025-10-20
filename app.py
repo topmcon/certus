@@ -1,3 +1,4 @@
+from app_pages import crypto_quotes
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import streamlit as st

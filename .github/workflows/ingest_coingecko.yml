@@ -1,0 +1,27 @@
+name: Ingest CoinGecko
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: cp .env.example .env
+      - run: python -m certus.ingestion.ingest_coingecko --symbols BTC,ETH,SOL --vs USD --top 50 --dest duckdb,parquet
+        env:
+          CG_API_KEY: ${{ secrets.CG_API_KEY }}
+          CG_BASE_URL: ${{ secrets.CG_BASE_URL }}
+      - name: Commit data artifacts
+        run: |
+          git config user.name "certus-bot"
+          git config user.email "certus@example.com"
+          git add data/*.parquet data/certus.duckdb || true
+          git commit -m "data: update cg quotes" || echo "no changes"
+          git push || true
