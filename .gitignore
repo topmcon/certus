@@ -4,4 +4,9 @@ __pycache__/
 # Streamlit
 .streamlit/
 # Env
-.env
+.envdata/*.duckdb
+data/*.parquet
+logs/
+certus.egg-info/
+db/
+
