@@ -1,0 +1,57 @@
+PYTHONPATH=/workspaces/certus:/workspaces/certus:
+[2025-10-21 02:50:56] == RUN P2.9 ==
++ python scripts/calc_indicators.py
+[✔] indicators → data/indicators.parquet and DuckDB table 'indicators'
++ python scripts/calc_scores.py
+[✔] scores → DuckDB table 'scores'
++ python scripts/calc_signals.py
+[✔] signals → DuckDB table 'signals'
++ set +x
+SELECT symbol, ts, ROUND(price,4) price,
+              ROUND(ema_9,4) ema9, ROUND(ema_20,4) ema20,
+              ROUND(macd,6) macd, ROUND(macd_signal,6) macd_sig,
+              ROUND(rsi_14,2) rsi
+       FROM indicators ORDER BY ts DESC LIMIT 10
+  symbol             ts        price  ...         macd     macd_sig    rsi
+0    BTC  1761013538000  109538.5984  ... -1937.962270 -1437.113816  42.42
+1    ETH  1761013538000    3931.8724  ...  -106.050314   -95.622924  43.18
+2   USDT  1761013538000       1.0005  ...     0.000006     0.000062  47.43
+3   USDT  1761013527000       1.0005  ...     0.000019     0.000076  47.44
+4    ETH  1761013523000    3932.8727  ...  -108.059047   -93.016077  43.21
+5    BTC  1761013521000  109554.2686  ... -1967.867148 -1311.901702  42.44
+6    ETH  1761012613000    3932.2497  ...  -109.153005   -89.255334  43.19
+7   USDT  1761012606000       1.0005  ...     0.000036     0.000090  47.49
+8    BTC  1761012600000  109579.1926  ... -1979.008634 -1147.910341  42.49
+9    ETH  1761004800000    3978.7902  ...  -108.898182   -84.280917  44.48
+
+[10 rows x 8 columns] 
+
+SELECT symbol, ts, ROUND(price,4) price,
+              ROUND(trend_score,3) score
+       FROM scores ORDER BY ts DESC LIMIT 10
+  symbol             ts        price  score
+0    BTC  1761013538000  109538.5984 -0.746
+1    ETH  1761013538000    3931.8724 -0.741
+2   USDT  1761013538000       1.0005 -0.115
+3   USDT  1761013527000       1.0005 -0.115
+4    ETH  1761013523000    3932.8727 -0.741
+5    BTC  1761013521000  109554.2686 -0.745
+6    ETH  1761012613000    3932.2497 -0.741
+7   USDT  1761012606000       1.0005 -0.115
+8    BTC  1761012600000  109579.1926 -0.745
+9    ETH  1761004800000    3978.7902 -0.733 
+
+SELECT symbol, ts, signal, ROUND(price,4) price
+       FROM signals ORDER BY ts DESC LIMIT 10
+  symbol             ts signal        price
+0    ETH  1760140800000   SELL    3835.6328
+1    BTC  1759363200000    BUY  118503.2445
+2   USDT  1757548800000    BUY       1.0003
+3   USDT  1755820800000   SELL       0.9998
+4   USDT  1752710400000    BUY       1.0004
+5    BTC  1750982400000    BUY  106984.0125
+6   USDT  1750723200000    BUY       1.0006
+7   USDT  1748736000000    BUY       1.0003
+8   USDT  1748563200000   SELL       0.9999
+9    ETH  1745625600000    BUY    1788.7982 
+
