@@ -1,27 +1,40 @@
 #!/usr/bin/env bash
-# Robust nightly smoke
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+echo "== Certus P3 Smoke Check =="
 
-# Load .env safely (handles URLs, no xargs splitting issues)
-set -a
-source .env
-set +a
+# Re-run batch quietly
+python scripts/calc_signals.py >/dev/null
 
-echo ">> Running fetch..."
-PYTHONPATH="$(pwd)" python scripts/fetch_markets.py
-
-DB_PATH="${DUCKDB_PATH:-data/certus.duckdb}"
-echo ">> Verifying DB ($DB_PATH)..."
-
-python - <<PY
+# Print summaries
+python - <<'PY'
 import duckdb
-db = r"${DB_PATH}"
-con = duckdb.connect(db, read_only=True)
-print(con.sql("select count(*) n from markets").fetchdf())
-print(con.sql("select symbol, price, pct_change_24h from markets order by market_cap desc limit 5").fetchdf())
+con = duckdb.connect("data/markets.duckdb")
+
+print("\n-- Latest signals (top 10 by strength) --")
+print(con.sql("""
+  SELECT symbol, signal_type, ROUND(signal_strength,2) AS strength
+  FROM signals
+  WHERE ts = (SELECT MAX(ts) FROM signals)
+  ORDER BY strength DESC
+  LIMIT 10
+""").fetchdf().to_string(index=False))
+
+print("\n-- Latest scores (top 10 by score) --")
+print(con.sql("""
+  SELECT symbol, ROUND(price,2) AS price, ROUND(trend_score,2) AS trend_score, trend_tier
+  FROM scores
+  WHERE ts = (SELECT MAX(ts) FROM scores)
+  ORDER BY trend_score DESC
+  LIMIT 10
+""").fetchdf().to_string(index=False))
+
+print("\n-- Latest leaderboard (joined view) --")
+print(con.sql("""
+  SELECT symbol, ROUND(price,2) AS price, score, trend_tier, signal_type
+  FROM latest_leaderboard
+  LIMIT 10
+""").fetchdf().to_string(index=False))
+
 con.close()
 PY
-
-echo "✅ Smoke OK."
