@@ -1,40 +1,55 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
+trap 'echo "❌ FAILED at line $LINENO: $BASH_COMMAND"' ERR
 
-echo "== Certus P3 Smoke Check =="
+echo "== Certus P4.2 Smoke Check =="
 
-# Re-run batch quietly
-python scripts/calc_signals.py >/dev/null
+echo "== Python =="
+python --version
 
-# Print summaries
+echo "== Step 1: Fetch =="
+python scripts/fetch_markets.py
+
+echo "== Step 2: Indicators =="
+python scripts/calc_indicators.py
+
+echo "== Step 3: Scores =="
+python scripts/calc_scores.py
+
+echo "== Step 4: DB Health Check =="
 python - <<'PY'
 import duckdb
 con = duckdb.connect("data/markets.duckdb")
 
-print("\n-- Latest signals (top 10 by strength) --")
-print(con.sql("""
-  SELECT symbol, signal_type, ROUND(signal_strength,2) AS strength
-  FROM signals
-  WHERE ts = (SELECT MAX(ts) FROM signals)
-  ORDER BY strength DESC
-  LIMIT 10
-""").fetchdf().to_string(index=False))
+def show(sql):
+    df = con.sql(sql).fetchdf()
+    print(df.to_string(index=False))
 
-print("\n-- Latest scores (top 10 by score) --")
-print(con.sql("""
-  SELECT symbol, ROUND(price,2) AS price, ROUND(trend_score,2) AS trend_score, trend_tier
-  FROM scores
-  WHERE ts = (SELECT MAX(ts) FROM scores)
-  ORDER BY trend_score DESC
-  LIMIT 10
-""").fetchdf().to_string(index=False))
+print("-- Row counts --")
+for t in ("markets","indicators","scores"):
+    show(f"SELECT '{t}' AS table, COUNT(*) AS rows FROM {t}")
 
-print("\n-- Latest leaderboard (joined view) --")
-print(con.sql("""
-  SELECT symbol, ROUND(price,2) AS price, score, trend_tier, signal_type
-  FROM latest_leaderboard
-  LIMIT 10
-""").fetchdf().to_string(index=False))
-
+print("\n-- Latest sample --")
+show("""
+WITH latest AS (
+  SELECT *,
+         row_number() OVER (
+           PARTITION BY id
+           ORDER BY COALESCE(last_updated, to_timestamp(ts/1000)) DESC
+         ) rn
+  FROM markets
+)
+SELECT id, symbol,
+       ROUND(price,2)                       AS price,
+       ROUND(price_change_percentage_24h,2) AS pct_24h,
+       ROUND(high_24h,2)                    AS high_24h,
+       ROUND(low_24h,2)                     AS low_24h
+FROM latest
+WHERE rn = 1
+ORDER BY market_cap DESC NULLS LAST
+LIMIT 10
+""")
 con.close()
 PY
+
+echo "== DONE ✅ Certus pipeline verified =="
