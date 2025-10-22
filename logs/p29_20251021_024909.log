@@ -278,3 +278,32 @@ M	pyproject.toml
 M	requirements.txt
 M	scripts/fetch_markets.py
 M	scripts/smoke_check.sh
+[feat/p2.9-signals 8102a3c] P2.9: indicators→scores→signals chain, safe runner, Makefile, package installable
+ 6 files changed, 427 insertions(+)
+ create mode 100644 logs/duckdb_check.log
+ create mode 100644 logs/p29_20251021_024715.log
+ create mode 100644 logs/p29_20251021_024740.log
+ create mode 100644 logs/p29_20251021_024909.log
+ create mode 100644 logs/p29_20251021_025056.log
+ create mode 100644 logs/p29_20251021_025230.log
+remote: 
+remote: Create a pull request for 'feat/p2.9-signals' on GitHub by visiting:        
+remote:      https://github.com/topmcon/certus/pull/new/feat/p2.9-signals        
+remote: 
+To https://github.com/topmcon/certus
+ * [new branch]      feat/p2.9-signals -> feat/p2.9-signals
+branch 'feat/p2.9-signals' set up to track 'origin/feat/p2.9-signals'.
+
+== Done ==
+Quick usage:
+  make run       # indicators + scores + signals
+  make smoke     # full safe runner with samples
+  make debug     # same with bash -x trace
+
+[?2004h[0;32m@topmcon [0m➜ [1;34m/workspaces/certus [0;36m([1;31mfeat/p2.9-signals[0;36m) [0m$ x[7mcertus/analytics/signals.py[27m
+[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Ccertus/analytics/signals.py
+�^C[?2004l[?2004h[?2004l
+[?2004h[0;32m@topmcon [1;31m➜ [1;34m/workspaces/certus [0;36m([1;31mfeat/p2.9-signals[0;36m) [0m$ [7mcertus/analytics/signals.py[27m
+[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Ccertus/analytics/signals.py
+[A
+[?2004lbash: certus/analytics/signals.py: Permission denied

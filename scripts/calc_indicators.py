@@ -1,31 +1,27 @@
-import duckdb, pandas as pd
-from pathlib import Path
+# scripts/calc_indicators.py
+from __future__ import annotations
+import duckdb, logging
+from certus.storage.schema import ensure_db
 from certus.analytics.indicators import compute_indicators
 
-DB_PATH = "data/markets.duckdb"
-PARQUET_OUT = "data/indicators.parquet"
+logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s")
 
 def main():
-    con = duckdb.connect(DB_PATH)
+    con = ensure_db()
+    logging.info("Loading markets to compute indicators…")
     df = con.sql("""
-      SELECT ts, id, UPPER(symbol) AS symbol, price
-      FROM markets
-      WHERE price IS NOT NULL
-      ORDER BY ts
+        SELECT id, symbol, price, last_updated
+        FROM markets
+        WHERE price IS NOT NULL
+        ORDER BY symbol, last_updated
     """).fetchdf()
     if df.empty:
-        raise SystemExit("No market rows found. Run scripts/fetch_markets.py first.")
-
+        logging.warning("No market rows to compute.")
+        return
     ind = compute_indicators(df)
-
-    Path(PARQUET_OUT).parent.mkdir(parents=True, exist_ok=True)
-    ind.to_parquet(PARQUET_OUT, index=False)
-
     con.register("ind", ind)
-    con.execute("DROP TABLE IF EXISTS indicators")
-    con.execute("CREATE TABLE indicators AS SELECT * FROM ind")
-    con.close()
-    print(f"[✔] indicators → {PARQUET_OUT} and DuckDB table 'indicators'")
+    con.execute("INSERT INTO indicators SELECT * FROM ind")
+    logging.info("Indicators inserted: %d", len(ind))
 
 if __name__ == "__main__":
     main()
