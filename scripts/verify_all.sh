@@ -1,40 +1,35 @@
-#!/usr/bin/env bash
-set -Eeuo pipefail
-trap 'echo "❌ FAILED at line $LINENO: $BASH_COMMAND"' ERR
+mkdir -p .github/workflows
+cat > .github/workflows/certus-verify.yml <<'YAML'
+name: Certus Verify
 
-echo "== Certus Verification Suite =="
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"  # 03:00 UTC daily
 
-# Respect pause flag in .env
-if grep -q '^CERTUS_PAUSED=true' .env 2>/dev/null; then
-  echo "[Certus] ⚠️ System paused — skipping verification per .env"
-  exit 0
-fi
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-echo "== Python & pip =="
-python --version
-pip list | head -n 25 || true
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-echo "== Syntax check (*.py) =="
-py_files=$(git ls-files '*.py' || true)
-if [ -n "${py_files:-}" ]; then
-  python - <<'PY' <<< "$py_files"
-import sys, py_compile
-paths=sys.stdin.read().splitlines(); bad=[]
-for p in paths:
-    try: py_compile.compile(p, doraise=True)
-    except Exception as e: bad.append((p,str(e)))
-if bad:
-    print("Syntax errors:"); [print(" -",p,"->",e) for p,e in bad]; sys.exit(1)
-print("OK: no syntax errors")
-PY
-else
-  echo "No Python files found."
-fi
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-echo "== API & DB checks =="
-python scripts/test_apis.py
+      - name: Create .env if missing (no secrets)
+        run: |
+          if [ ! -f .env ]; then
+            echo "CERTUS_PAUSED=false" > .env
+          fi
 
-echo "== Pipeline smoke =="
-./scripts/smoke_check.sh
-
-echo "== ✅ Verification complete =="
+      - name: Run verification
+        run: bash scripts/verify_all.sh
+YAML
