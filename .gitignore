@@ -18,3 +18,4 @@ data/*.duckdb
 # Certus large/local files
 backups/*.zip
 data/*.duckdb
+.env
