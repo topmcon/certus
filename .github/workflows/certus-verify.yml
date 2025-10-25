@@ -2,6 +2,11 @@ name: Certus Verify
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch or tag to verify"
+        required: true
+        default: "main"
   schedule:
     - cron: "0 3 * * *"  # 03:00 UTC daily
 
@@ -9,8 +14,10 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      -       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'main' }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
