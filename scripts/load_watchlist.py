@@ -1,0 +1,10 @@
+import duckdb, pandas as pd
+df = pd.read_csv("config/watchlist.csv")
+df["symbol"] = df["symbol"].str.upper().str.strip()
+con = duckdb.connect("data/markets.duckdb")
+con.execute("CREATE TABLE IF NOT EXISTS watchlist (symbol VARCHAR PRIMARY KEY)")
+con.execute("DELETE FROM watchlist")
+con.register("df", df)
+con.execute("INSERT INTO watchlist SELECT symbol FROM df")
+print("loaded symbols:", con.sql("SELECT COUNT(*) FROM watchlist").fetchone()[0])
+con.close()

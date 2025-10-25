@@ -1,0 +1,24 @@
+-- Materialize the enriched stream for fast UI queries
+CREATE TABLE IF NOT EXISTS trend_feed_snap AS
+SELECT * FROM trend_feed_enriched
+WHERE 1=0; -- empty schema only
+
+-- Upsert latest rows into the snapshot
+CREATE OR REPLACE MACRO upsert_trend_feed_snap() AS TABLE
+WITH src AS (
+  SELECT * FROM trend_feed_enriched
+),
+dedup AS (
+  SELECT *,
+         ROW_NUMBER() OVER (PARTITION BY kind, source_id ORDER BY ts DESC) rn
+  FROM src
+)
+SELECT * FROM dedup WHERE rn=1;
+
+-- Simple “merge” by delete+insert (DuckDB-safe)
+DELETE FROM trend_feed_snap
+USING (SELECT kind, source_id FROM trend_feed_enriched) s
+WHERE trend_feed_snap.kind = s.kind AND trend_feed_snap.source_id = s.source_id;
+
+INSERT INTO trend_feed_snap
+SELECT * FROM upsert_trend_feed_snap();
