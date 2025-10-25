@@ -1,27 +1,55 @@
 #!/usr/bin/env bash
-# Robust nightly smoke
-set -euo pipefail
+set -Eeuo pipefail
+trap 'echo "❌ FAILED at line $LINENO: $BASH_COMMAND"' ERR
 
-cd "$(dirname "$0")/.."
+echo "== Certus P4.2 Smoke Check =="
 
-# Load .env safely (handles URLs, no xargs splitting issues)
-set -a
-source .env
-set +a
+echo "== Python =="
+python --version
 
-echo ">> Running fetch..."
-PYTHONPATH="$(pwd)" python scripts/fetch_markets.py
+echo "== Step 1: Fetch =="
+python scripts/fetch_markets.py
 
-DB_PATH="${DUCKDB_PATH:-data/certus.duckdb}"
-echo ">> Verifying DB ($DB_PATH)..."
+echo "== Step 2: Indicators =="
+python scripts/calc_indicators.py
 
-python - <<PY
+echo "== Step 3: Scores =="
+python scripts/calc_scores.py
+
+echo "== Step 4: DB Health Check =="
+python - <<'PY'
 import duckdb
-db = r"${DB_PATH}"
-con = duckdb.connect(db, read_only=True)
-print(con.sql("select count(*) n from markets").fetchdf())
-print(con.sql("select symbol, price, pct_change_24h from markets order by market_cap desc limit 5").fetchdf())
+con = duckdb.connect("data/markets.duckdb")
+
+def show(sql):
+    df = con.sql(sql).fetchdf()
+    print(df.to_string(index=False))
+
+print("-- Row counts --")
+for t in ("markets","indicators","scores"):
+    show(f"SELECT '{t}' AS table, COUNT(*) AS rows FROM {t}")
+
+print("\n-- Latest sample --")
+show("""
+WITH latest AS (
+  SELECT *,
+         row_number() OVER (
+           PARTITION BY id
+           ORDER BY COALESCE(last_updated, to_timestamp(ts/1000)) DESC
+         ) rn
+  FROM markets
+)
+SELECT id, symbol,
+       ROUND(price,2)                       AS price,
+       ROUND(price_change_percentage_24h,2) AS pct_24h,
+       ROUND(high_24h,2)                    AS high_24h,
+       ROUND(low_24h,2)                     AS low_24h
+FROM latest
+WHERE rn = 1
+ORDER BY market_cap DESC NULLS LAST
+LIMIT 10
+""")
 con.close()
 PY
 
-echo "✅ Smoke OK."
+echo "== DONE ✅ Certus pipeline verified =="

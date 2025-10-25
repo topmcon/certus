@@ -1,0 +1,2 @@
+[check] tables: ['indicators', 'indicators_history', 'latest_signals', 'markets', 'scores_history', 'signals']
+[check] markets rows: 549

@@ -1,0 +1,309 @@
+[2025-10-21 02:49:09] == RUN P2.9 ==
++ python scripts/calc_indicators.py
+Traceback (most recent call last):
+  File "/workspaces/certus/scripts/calc_indicators.py", line 3, in <module>
+    from certus.analytics.indicators import compute_indicators
+ModuleNotFoundError: No module named 'certus'
+++ on_err
+++ code=1
++++ ts
++++ date '+%Y-%m-%d %H:%M:%S'
+++ echo -e '\n[2025-10-21 02:49:09] ❌ Error (exit 1) at line 33. Full log: logs/p29_20251021_024909.log'
+
+[2025-10-21 02:49:09] ❌ Error (exit 1) at line 33. Full log: logs/p29_20251021_024909.log
+++ echo 'Dropping you into an interactive shell for inspection (terminal will stay open).'
+Dropping you into an interactive shell for inspection (terminal will stay open).
+++ echo 'Tip: tail -n 200 logs/p29_20251021_024909.log'
+Tip: tail -n 200 logs/p29_20251021_024909.log
+++ exec bash -i
+[?2004h[0;32m@topmcon [0m➜ [1;34m/workspaces/certus [0;36m([1;31mfeat/p2.9-signals[0;36m) [0m$ #!/usr/bin/env bash
+set -euo pipefail
+
+echo "== P2.9 FIX: package path + clean scripts + safe runner =="
+
+# 0) Ensure structure
+mkdir -p certus/analytics scripts data logs
+: > certus/__init__.py
+: > certus/analytics/__init__.py
+
+# 1) indicators.py (EMA/RSI/MACD)
+cat > certus/analytics/indicators.py <<'PY'
+import pandas as pd
+import numpy as np
+
+def _ema(s: pd.Series, span: int) -> pd.Series:
+    return s.ewm(span=span, adjust=False).mean()
+
+def _rsi(close: pd.Series, period: int = 14) -> pd.Series:
+    delta = close.diff()
+    gain = delta.clip(lower=0.0)
+    loss = -delta.clip(upper=0.0)
+    avg_gain = gain.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    rsi = 100 - (100 / (1 + rs))
+    return rsi.fillna(50.0)
+
+def compute_indicators(df: pd.DataFrame) -> pd.DataFrame:    need = {'ts','id','symbol','price'}    missing = need - set(df.columns)    if missing:        raise ValueError(f"compute_indicators missing columns: {missing}")    df = df.copy().sort_values(["symbol","ts"])    parts = []    for sym, g in df.groupby("symbol", sort=False):        g = g.copy()        close = g["price"].astype(float)        g["ema_9"]  = _ema(close, 9)        g["ema_20"] = _ema(close, 20)        ema12 = _ema(close, 12)        ema26 = _ema(close, 26)        macd = ema12 - ema26        g["macd"] = macd        g["macd_signal"] = _ema(macd, 9)        g["macd_hist"] = g["macd"] - g["macd_signal"]        g["rsi_14"] = _rsi(close, 14)        parts.append(g)    return pd.concat(parts, ignore_index=True)PY# 2) signals.py (crossover rules)cat > certus/analytics/signals.py <<'PY'import pandas as pddef detect_signals(df: pd.DataFrame) -> pd.DataFrame:    need = {"ts","id","symbol","price","ema_9","ema_20","macd","macd_signal","rsi_14"}    missing = need - set(df.columns)    if missing:        raise ValueError(f"detect_signals missing columns: {missing}")    df = df.copy().sort_values(["symbol","ts"])    out = []    for sym, g in df.groupby("symbol", sort=False):        g = g.copy()        ema_cross_up   = (g["ema_9"] > g["ema_20"]) & (g["ema_9"].shift(1) <= g["ema_20"].shift(1))        ema_cross_down = (g["ema_9"] < g["ema_20"]) & (g["ema_9"].shift(1) >= g["ema_20"].shift(1))        macd_cross_up   = (g["macd"] > g["macd_signal"]) & (g["macd"].shift(1) <= g["macd_signal"].shift(1))        macd_cross_down = (g["macd"] < g["macd_signal"]) & (g["macd"].shift(1) >= g["macd_signal"].shift(1))        buy  = ema_cross_up   & macd_cross_up        sell = ema_cross_down & macd_cross_down        mask = buy | sell        if mask.any():            gg = g.loc[mask, ["ts","id","symbol","price","ema_9","ema_20","macd","macd_signal","rsi_14"]].copy()            gg["signal"] = gg.index.map(lambda i: "BUY" if buy.loc[i] else "SELL")            out.append(gg)    if not out:        return pd.DataFrame(columns=["ts","id","symbol","price","ema_9","ema_20","macd","macd_signal","rsi_14","signal"])    return pd.concat(out, ignore_index=True)PY# 3) calc_indicators.py (clean + register DF)cat > scripts/calc_indicators.py <<'PY'import duckdb, pandas as pdfrom pathlib import Pathfrom certus.analytics.indicators import compute_indicatorsDB_PATH = "data/markets.duckdb"PARQUET_OUT = "data/indicators.parquet"def main():    con = duckdb.connect(DB_PATH)    df = con.sql("""      SELECT ts, id, UPPER(symbol) AS symbol, price      FROM markets      WHERE price IS NOT NULL      ORDER BY ts    """).fetchdf()    if df.empty:        raise SystemExit("No market rows found. Run scripts/fetch_markets.py first.")    ind = compute_indicators(df)    Path(PARQUET_OUT).parent.mkdir(parents=True, exist_ok=True)    ind.to_parquet(PARQUET_OUT, index=False)    con.register("ind", ind)    con.execute("DROP TABLE IF EXISTS indicators")    con.execute("CREATE TABLE indicators AS SELECT * FROM ind")    con.close()    print(f"[✔] indicators → {PARQUET_OUT} and DuckDB table 'indicators'")if __name__ == "__main__":    main()PY# 4) calc_scores.py (clean + register DF)cat > scripts/calc_scores.py <<'PY'import duckdb, pandas as pdimport numpy as npDB_PATH = "data/markets.duckdb"def compute_scores(df: pd.DataFrame) -> pd.DataFrame:    g = df.copy()    g["ema_trend"]    = np.where(g["ema_9"] > g["ema_20"],  1.0, -1.0)    g["macd_signal2"] = np.sign(g["macd"])    r = g["rsi_14"].clip(0,100)    g["rsi_score"] = ((r - 50.0) / 50.0).clip(-1, 1)    g["trend_score"] = (0.40 * g["ema_trend"]) + (0.30 * g["macd_signal2"]) + (0.30 * g["rsi_score"])    return gdef main():    con = duckdb.connect(DB_PATH)    ind = con.sql("""      SELECT ts,id,symbol,price,ema_9,ema_20,macd,macd_signal,macd_hist,rsi_14      FROM indicators      ORDER BY symbol, ts    """).fetchdf()    if ind.empty:        raise SystemExit("No indicators found. Run scripts/calc_indicators.py first.")    scores = compute_scores(ind)    con.register("scores_df", scores)    con.execute("DROP TABLE IF EXISTS scores")    con.execute("CREATE TABLE scores AS SELECT * FROM scores_df")    con.close()    print("[✔] scores → DuckDB table 'scores'")if __name__ == "__main__":    main()PY# 5) calc_signals.py (clean + register DF)cat > scripts/calc_signals.py <<'PY'import duckdb, pandas as pdfrom certus.analytics.signals import detect_signalsDB_PATH = "data/markets.duckdb"def main():    con = duckdb.connect(DB_PATH)    ind = con.sql("""      SELECT ts,id,symbol,price,ema_9,ema_20,macd,macd_signal,rsi_14      FROM indicators      ORDER BY symbol, ts    """).fetchdf()    if ind.empty:        raise SystemExit("No indicators found. Run scripts/calc_indicators.py first.")    sigs = detect_signals(ind)    con.register("signals_df", sigs)    con.execute("DROP TABLE IF EXISTS signals")    con.execute("CREATE TABLE signals AS SELECT * FROM signals_df")    con.close()    print("[✔] signals → DuckDB table 'signals'")if __name__ == "__main__":    main()PY# 6) Safe runner (exports PYTHONPATH so 'certus' is importable)cat > scripts/p29_run.sh <<'BASH'#!/usr/bin/env bashset -Eeuo pipefailts(){ date +"%Y-%m-%d %H:%M:%S"; }LOG="logs/p29_$(date +%Y%m%d_%H%M%S).log"; mkdir -p logson_err() {  code=$?  echo -e "\n[$(ts)] ❌ Error (exit $code) at line $BASH_LINENO. Log: $LOG"  echo "Keeping terminal open. Try: tail -n 200 $LOG"  exec bash -i}trap on_err ERR# Make repo importableexport PYTHONPATH="$(pwd):${PYTHONPATH:-}"echo "PYTHONPATH=$PYTHONPATH" | tee -a "$LOG"# Normalize line endingsfind scripts -type f -name "*.sh" -exec sed -i 's/\r$//' {} \; || truefind certus -type f -name "*.py" -exec sed -i 's/\r$//' {} \; || truechmod +x scripts/*.sh 2>/dev/null || trueecho "[$(ts)] == RUN P2.9 ==" | tee -a "$LOG"if [ ! -f data/markets.duckdb ]; then  echo "[$(ts)] WARNING: data/markets.duckdb missing. Run: python scripts/fetch_markets.py" | tee -a "$LOG"fi{  set -x  python scripts/calc_indicators.py  python scripts/calc_scores.py  python scripts/calc_signals.py  set +x} 2>&1 | tee -a "$LOG"python - <<'PY' 2>&1 | tee -a "$LOG" || trueimport duckdbcon = duckdb.connect("data/markets.duckdb")def show(q):    try:[7m        print(q); print(con.sql(q).fetchdf(), "\n")[27m[7m    except Exception as e:[27m[7m        print("  [sample error]", e, "\n")[27m[7mshow("""SELECT symbol, ts, ROUND(price,4) price,[27m[7m              ROUND(ema_9,4) ema9, ROUND(ema_20,4) ema20,[27m[7m              ROUND(macd,6) macd, ROUND(macd_signal,6) macd_sig,[27m[7m              ROUND(rsi_14,2) rsi[27m[7m       FROM indicators ORDER BY ts DESC LIMIT 10""")[27m[7mshow("""SELECT symbol, ts, ROUND(price,4) price,[27m[7m              ROUND(trend_score,3) score[27m[7m       FROM scores ORDER BY ts DESC LIMIT 10""")[27m[7mshow("""SELECT symbol, ts, signal, ROUND(price,4) price[27m[7m       FROM signals ORDER BY ts DESC LIMIT 10""")[27m[7mcon.close()[27m[7mPY[27m[7mecho "[$(ts)] ✅ DONE. Log: $LOG"[27m[7mecho "Press ENTER to keep this terminal open; type 'exit' to close."[27m[7mread -r _[27m[7mBASH[27m[7mchmod +x scripts/p29_run.sh[27m[7mecho "== Execute =="[27m[7m# Export PYTHONPATH for this session too and run[27m[7mexport PYTHONPATH="$(pwd):${PYTHONPATH:-}"[27m[7mscripts/p29_run.sh[27m        print(q); print(con.sql(q).fetchdf(), "\n")    except Exception as e:        print("  [sample error]", e, "\n")show("""SELECT symbol, ts, ROUND(price,4) price,              ROUND(ema_9,4) ema9, ROUND(ema_20,4) ema20,              ROUND(macd,6) macd, ROUND(macd_signal,6) macd_sig,              ROUND(rsi_14,2) rsi       FROM indicators ORDER BY ts DESC LIMIT 10""")show("""SELECT symbol, ts, ROUND(price,4) price,              ROUND(trend_score,3) score       FROM scores ORDER BY ts DESC LIMIT 10""")show("""SELECT symbol, ts, signal, ROUND(price,4) price       FROM signals ORDER BY ts DESC LIMIT 10""")con.close()PYecho "[$(ts)] ✅ DONE. Log: $LOG"echo "Press ENTER to keep this terminal open; type 'exit' to close."read -r _BASHchmod +x scripts/p29_run.shecho "== Execute =="# Export PYTHONPATH for this session too and runexport PYTHONPATH="$(pwd):${PYTHONPATH:-}"scripts/p29_run.sh
+[?2004l== P2.9 FIX: package path + clean scripts + safe runner ==
+== Execute ==
+PYTHONPATH=/workspaces/certus:/workspaces/certus:
+[2025-10-21 02:50:56] == RUN P2.9 ==
++ python scripts/calc_indicators.py
+[✔] indicators → data/indicators.parquet and DuckDB table 'indicators'
++ python scripts/calc_scores.py
+[✔] scores → DuckDB table 'scores'
++ python scripts/calc_signals.py
+[✔] signals → DuckDB table 'signals'
++ set +x
+SELECT symbol, ts, ROUND(price,4) price,
+              ROUND(ema_9,4) ema9, ROUND(ema_20,4) ema20,
+              ROUND(macd,6) macd, ROUND(macd_signal,6) macd_sig,
+              ROUND(rsi_14,2) rsi
+       FROM indicators ORDER BY ts DESC LIMIT 10
+  symbol             ts        price  ...         macd     macd_sig    rsi
+0    BTC  1761013538000  109538.5984  ... -1937.962270 -1437.113816  42.42
+1    ETH  1761013538000    3931.8724  ...  -106.050314   -95.622924  43.18
+2   USDT  1761013538000       1.0005  ...     0.000006     0.000062  47.43
+3   USDT  1761013527000       1.0005  ...     0.000019     0.000076  47.44
+4    ETH  1761013523000    3932.8727  ...  -108.059047   -93.016077  43.21
+5    BTC  1761013521000  109554.2686  ... -1967.867148 -1311.901702  42.44
+6    ETH  1761012613000    3932.2497  ...  -109.153005   -89.255334  43.19
+7   USDT  1761012606000       1.0005  ...     0.000036     0.000090  47.49
+8    BTC  1761012600000  109579.1926  ... -1979.008634 -1147.910341  42.49
+9    ETH  1761004800000    3978.7902  ...  -108.898182   -84.280917  44.48
+
+[10 rows x 8 columns] 
+
+SELECT symbol, ts, ROUND(price,4) price,
+              ROUND(trend_score,3) score
+       FROM scores ORDER BY ts DESC LIMIT 10
+  symbol             ts        price  score
+0    BTC  1761013538000  109538.5984 -0.746
+1    ETH  1761013538000    3931.8724 -0.741
+2   USDT  1761013538000       1.0005 -0.115
+3   USDT  1761013527000       1.0005 -0.115
+4    ETH  1761013523000    3932.8727 -0.741
+5    BTC  1761013521000  109554.2686 -0.745
+6    ETH  1761012613000    3932.2497 -0.741
+7   USDT  1761012606000       1.0005 -0.115
+8    BTC  1761012600000  109579.1926 -0.745
+9    ETH  1761004800000    3978.7902 -0.733 
+
+SELECT symbol, ts, signal, ROUND(price,4) price
+       FROM signals ORDER BY ts DESC LIMIT 10
+  symbol             ts signal        price
+0    ETH  1760140800000   SELL    3835.6328
+1    BTC  1759363200000    BUY  118503.2445
+2   USDT  1757548800000    BUY       1.0003
+3   USDT  1755820800000   SELL       0.9998
+4   USDT  1752710400000    BUY       1.0004
+5    BTC  1750982400000    BUY  106984.0125
+6   USDT  1750723200000    BUY       1.0006
+7   USDT  1748736000000    BUY       1.0003
+8   USDT  1748563200000   SELL       0.9999
+9    ETH  1745625600000    BUY    1788.7982 
+
+[2025-10-21 02:50:59] ✅ DONE. Log: logs/p29_20251021_025056.log
+Press ENTER to keep this terminal open; type 'exit' to close.
+[?2004h[0;32m@topmcon [0m➜ [1;34m/workspaces/certus [0;36m([1;31mfeat/p2.9-signals[0;36m) [0m$ #!/usr/bin/env bash
+set -euo pipefail
+
+echo "== Certus packaging: make imports work without PYTHONPATH =="
+
+# 1) Ensure package layout (you already have certus/, keep as-is)
+test -d certus || { echo "Missing certus/ directory"; exit 1; }
+: > certus/__init__.py  # keep package marker
+: > certus/analytics/__init__.py  # idem
+
+# 2) Create a minimal pyproject.toml using setuptools
+cat > pyproject.toml <<'TOML'
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "certus"
+version = "0.0.1"
+description = "Certus (TrendLab Intelligence Engine)"
+requires-python = ">=3.10"
+dependencies = ["pandas", "duckdb"]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+[7minclude = ["certus*"][27m[7mTOML[27m[7m# 3) Install in editable mode (persists across terminals in this Codespace)[27m[7mpython -m pip install -e . 1>/dev/null[27m[7m# 4) Quick sanity: Python can import from anywhere without PYTHONPATH[27m[7mpython - <<'PY'[27m[7mimport importlib, sys[27m[7mprint("python:", sys.version.split()[0])[27m[7mprint("editable install check:", importlib.import_module("certus.analytics.indica[27m[7mtors"))[27m[7mPY[27m[7m# 5) (Optional) remove PYTHONPATH export from the runner since no longer needed[27m[7mif grep -q "export PYTHONPATH=" scripts/p29_run.sh 2>/dev/null; then[27m[7m  sed -i.bak '/export PYTHONPATH=/s/^/# removed: now installed as package /' scri[27m[7mpts/p29_run.sh[27m[7m  echo "[info] Commented out PYTHONPATH export in scripts/p29_run.sh (backup save[27m[7md as .bak)"[27m[7mfi[27m[7m# 6) Re-run the chain to confirm imports still work[27m[7mbash scripts/p29_run.sh || true[27m[7mecho "== Done. From now on, 'certus' is importable without setting PYTHONPATH =="[27minclude = ["certus*"]TOML# 3) Install in editable mode (persists across terminals in this Codespace)python -m pip install -e . 1>/dev/null# 4) Quick sanity: Python can import from anywhere without PYTHONPATHpython - <<'PY'import importlib, sysprint("python:", sys.version.split()[0])print("editable install check:", importlib.import_module("certus.analytics.indicators"))PY# 5) (Optional) remove PYTHONPATH export from the runner since no longer neededif grep -q "export PYTHONPATH=" scripts/p29_run.sh 2>/dev/null; then  sed -i.bak '/export PYTHONPATH=/s/^/# removed: now installed as package /' scripts/p29_run.sh  echo "[info] Commented out PYTHONPATH export in scripts/p29_run.sh (backup saved as .bak)"fi# 6) Re-run the chain to confirm imports still workbash scripts/p29_run.sh || trueecho "== Done. From now on, 'certus' is importable without setting PYTHONPATH =="
+[?2004l== Certus packaging: make imports work without PYTHONPATH ==
+
+[notice] A new release of pip is available: 25.1.1 -> 25.2
+[notice] To update, run: python -m pip install --upgrade pip
+python: 3.12.1
+editable install check: <module 'certus.analytics.indicators' from '/workspaces/certus/certus/analytics/indicators.py'>
+[info] Commented out PYTHONPATH export in scripts/p29_run.sh (backup saved as .bak)
+PYTHONPATH=/workspaces/certus:
+[2025-10-21 02:52:30] == RUN P2.9 ==
++ python scripts/calc_indicators.py
+[✔] indicators → data/indicators.parquet and DuckDB table 'indicators'
++ python scripts/calc_scores.py
+[✔] scores → DuckDB table 'scores'
++ python scripts/calc_signals.py
+[✔] signals → DuckDB table 'signals'
++ set +x
+SELECT symbol, ts, ROUND(price,4) price,
+              ROUND(ema_9,4) ema9, ROUND(ema_20,4) ema20,
+              ROUND(macd,6) macd, ROUND(macd_signal,6) macd_sig,
+              ROUND(rsi_14,2) rsi
+       FROM indicators ORDER BY ts DESC LIMIT 10
+  symbol             ts        price  ...         macd     macd_sig    rsi
+0    BTC  1761013538000  109538.5984  ... -1937.962270 -1437.113816  42.42
+1    ETH  1761013538000    3931.8724  ...  -106.050314   -95.622924  43.18
+2   USDT  1761013538000       1.0005  ...     0.000006     0.000062  47.43
+3   USDT  1761013527000       1.0005  ...     0.000019     0.000076  47.44
+4    ETH  1761013523000    3932.8727  ...  -108.059047   -93.016077  43.21
+5    BTC  1761013521000  109554.2686  ... -1967.867148 -1311.901702  42.44
+6    ETH  1761012613000    3932.2497  ...  -109.153005   -89.255334  43.19
+7   USDT  1761012606000       1.0005  ...     0.000036     0.000090  47.49
+8    BTC  1761012600000  109579.1926  ... -1979.008634 -1147.910341  42.49
+9    ETH  1761004800000    3978.7902  ...  -108.898182   -84.280917  44.48
+
+[10 rows x 8 columns] 
+
+SELECT symbol, ts, ROUND(price,4) price,
+              ROUND(trend_score,3) score
+       FROM scores ORDER BY ts DESC LIMIT 10
+  symbol             ts        price  score
+0    BTC  1761013538000  109538.5984 -0.746
+1    ETH  1761013538000    3931.8724 -0.741
+2   USDT  1761013538000       1.0005 -0.115
+3   USDT  1761013527000       1.0005 -0.115
+4    ETH  1761013523000    3932.8727 -0.741
+5    BTC  1761013521000  109554.2686 -0.745
+6    ETH  1761012613000    3932.2497 -0.741
+7   USDT  1761012606000       1.0005 -0.115
+8    BTC  1761012600000  109579.1926 -0.745
+9    ETH  1761004800000    3978.7902 -0.733 
+
+SELECT symbol, ts, signal, ROUND(price,4) price
+       FROM signals ORDER BY ts DESC LIMIT 10
+  symbol             ts signal        price
+0    ETH  1760140800000   SELL    3835.6328
+1    BTC  1759363200000    BUY  118503.2445
+2   USDT  1757548800000    BUY       1.0003
+3   USDT  1755820800000   SELL       0.9998
+4   USDT  1752710400000    BUY       1.0004
+5    BTC  1750982400000    BUY  106984.0125
+6   USDT  1750723200000    BUY       1.0006
+7   USDT  1748736000000    BUY       1.0003
+8   USDT  1748563200000   SELL       0.9999
+9    ETH  1745625600000    BUY    1788.7982 
+
+[2025-10-21 02:52:33] ✅ DONE. Log: logs/p29_20251021_025230.log
+Press ENTER to keep this terminal open; type 'exit' to close.
+== Done. From now on, 'certus' is importable without setting PYTHONPATH ==
+[?2004h[0;32m@topmcon [0m➜ [1;34m/workspaces/certus [0;36m([1;31mfeat/p2.9-signals[0;36m) [0m$ [7mpython -m pip install -e .[27m
+[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Cpython -m pip install -e .
+[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[K 
+[?2004lObtaining file:///workspaces/certus
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Requirement already satisfied: pandas in /usr/local/python/3.12.1/lib/python3.12/site-packages (from certus==0.0.1) (2.2.3)
+Requirement already satisfied: duckdb in /usr/local/python/3.12.1/lib/python3.12/site-packages (from certus==0.0.1) (1.4.1)
+Requirement already satisfied: numpy>=1.26.0 in /home/codespace/.local/lib/python3.12/site-packages (from pandas->certus==0.0.1) (2.3.1)
+Requirement already satisfied: python-dateutil>=2.8.2 in /home/codespace/.local/lib/python3.12/site-packages (from pandas->certus==0.0.1) (2.9.0.post0)
+Requirement already satisfied: pytz>=2020.1 in /home/codespace/.local/lib/python3.12/site-packages (from pandas->certus==0.0.1) (2025.2)
+Requirement already satisfied: tzdata>=2022.7 in /home/codespace/.local/lib/python3.12/site-packages (from pandas->certus==0.0.1) (2025.2)
+Requirement already satisfied: six>=1.5 in /home/codespace/.local/lib/python3.12/site-packages (from python-dateutil>=2.8.2->pandas->certus==0.0.1) (1.17.0)
+Building wheels for collected packages: certus
+  Building editable for certus (pyproject.toml): started
+  Building editable for certus (pyproject.toml): finished with status 'done'
+  Created wheel for certus: filename=certus-0.0.1-0.editable-py3-none-any.whl size=2678 sha256=b106761e845f65b8086f5dbaa600db99e94e225fe8115cd2bdcd3cfd933c8355
+  Stored in directory: /tmp/pip-ephem-wheel-cache-l7mjd4_y/wheels/52/fa/f2/2465c637349aedc33270d4deaa6ec5109cd44cf3bcaef825e1
+Successfully built certus
+Installing collected packages: certus
+  Attempting uninstall: certus
+    Found existing installation: certus 0.0.1
+    Can't uninstall 'certus'. No files were found to uninstall.
+Successfully installed certus-0.0.1
+
+[notice] A new release of pip is available: 25.1.1 -> 25.2
+[notice] To update, run: python -m pip install --upgrade pip
+[?2004h[0;32m@topmcon [0m➜ [1;34m/workspaces/certus [0;36m([1;31mfeat/p2.9-signals[0;36m) [0m$ #!/usr/bin/env bash
+set -euo pipefail
+
+echo "== Certus P2.9 — convenience targets + commit =="
+
+# 1) Makefile with simple run targets
+cat > Makefile <<'MK'
+.PHONY: fetch indicators scores signals run smoke debug clean
+
+# Paths
+DB := data/markets.duckdb
+
+fetch:
+        @echo "== Fetch markets =="
+        python scripts/fetch_markets.py
+
+indicators:
+        @echo "== Indicators =="
+        python scripts/calc_indicators.py
+
+scores:
+        @echo "== Scores =="
+        python scripts/calc_scores.py
+
+signals:
+        @echo "== Signals =="
+        python scripts/calc_signals.py
+
+run: indicators scores signals        @echo "== Chain complete =="smoke:        @echo "== Smoke check =="        bash scripts/p29_run.shdebug:        @echo "== Debug trace =="        bash -x scripts/p29_run.sh 2>&1 | tee logs/trace_$(shell date +%Y%m%d_%H%M%S).logclean:        @echo "== Clean outputs =="        rm -f data/indicators.parquet        sqlite3 /dev/null "" >/dev/null 2>&1 || trueMK# 2) Add a tiny smoke script that only prints head rows (fast)cat > scripts/smoke_quick.sh <<'BASH'#!/usr/bin/env bashset -euo pipefailpython - <<'PY'import duckdbcon=duckdb.connect("data/markets.duckdb")for title, q in [  ("INDICATORS", "SELECT symbol, ts, ROUND(price,4) price, ROUND(ema_9,4) ema9, ROUND(ema_20,4) ema20 FROM indicators ORDER BY ts DESC LIMIT 5"),  ("SCORES",     "SELECT symbol, ts, ROUND(price,4) price, ROUND(trend_score,3) score FROM scores ORDER BY ts DESC LIMIT 5"),  ("SIGNALS",    "SELECT symbol, ts, signal, ROUND(price,4) price FROM signals ORDER BY ts DESC LIMIT 5"),[7m]:[27m[7m    print(f"\n== {title} ==")[27m[7m    try:[27m[7m        print(con.sql(q).fetchdf())[27m[7m    except Exception as e:[27m[7m        print("[error]", e)[27m[7mcon.close()[27m[7mPY[27m[7mBASH[27m[7mchmod +x scripts/smoke_quick.sh[27m[7m# 3) Optional: create a branch, commit and push (safe if branch exists)[27m[7mBRANCH="feat/p2.9-signals"[27m[7mgit checkout -B "$BRANCH"[27m[7mgit add certus scripts Makefile pyproject.toml logs/.gitkeep 2>/dev/null || true[27m[7mgit add logs >/dev/null 2>&1 || true[27m[7mgit commit -m "P2.9: indicators→scores→signals chain, safe runner, Makefile, pack[27m[7mage installable"[27m[7mgit push -u origin "$BRANCH" || true[27m[7mecho[27m[7mecho "== Done =="[27m[7mecho "Quick usage:"[27m[7mecho "  make run       # indicators + scores + signals"[27m[7mecho "  make smoke     # full safe runner with samples"[27m[7mecho "  make debug     # same with bash -x trace"[27m[7mecho[27m]:    print(f"\n== {title} ==")    try:        print(con.sql(q).fetchdf())    except Exception as e:        print("[error]", e)con.close()PYBASHchmod +x scripts/smoke_quick.sh# 3) Optional: create a branch, commit and push (safe if branch exists)BRANCH="feat/p2.9-signals"git checkout -B "$BRANCH"git add certus scripts Makefile pyproject.toml logs/.gitkeep 2>/dev/null || truegit add logs >/dev/null 2>&1 || truegit commit -m "P2.9: indicators→scores→signals chain, safe runner, Makefile, package installable"git push -u origin "$BRANCH" || trueechoecho "== Done =="echo "Quick usage:"echo "  make run       # indicators + scores + signals"echo "  make smoke     # full safe runner with samples"echo "  make debug     # same with bash -x trace"echo
+[?2004l== Certus P2.9 — convenience targets + commit ==
+Reset branch 'feat/p2.9-signals'
+M	app.py
+M	certus/__init__.py
+M	certus/storage/schema.py
+M	certus/utils/layout.py
+T	data/certus.duckdb
+D	data/cg_quotes_1760925734.parquet
+M	data/markets.duckdb
+D	data/markets_latest.parquet
+M	pyproject.toml
+M	requirements.txt
+M	scripts/fetch_markets.py
+M	scripts/smoke_check.sh
+[feat/p2.9-signals 8102a3c] P2.9: indicators→scores→signals chain, safe runner, Makefile, package installable
+ 6 files changed, 427 insertions(+)
+ create mode 100644 logs/duckdb_check.log
+ create mode 100644 logs/p29_20251021_024715.log
+ create mode 100644 logs/p29_20251021_024740.log
+ create mode 100644 logs/p29_20251021_024909.log
+ create mode 100644 logs/p29_20251021_025056.log
+ create mode 100644 logs/p29_20251021_025230.log
+remote: 
+remote: Create a pull request for 'feat/p2.9-signals' on GitHub by visiting:        
+remote:      https://github.com/topmcon/certus/pull/new/feat/p2.9-signals        
+remote: 
+To https://github.com/topmcon/certus
+ * [new branch]      feat/p2.9-signals -> feat/p2.9-signals
+branch 'feat/p2.9-signals' set up to track 'origin/feat/p2.9-signals'.
+
+== Done ==
+Quick usage:
+  make run       # indicators + scores + signals
+  make smoke     # full safe runner with samples
+  make debug     # same with bash -x trace
+
+[?2004h[0;32m@topmcon [0m➜ [1;34m/workspaces/certus [0;36m([1;31mfeat/p2.9-signals[0;36m) [0m$ x[7mcertus/analytics/signals.py[27m
+[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Ccertus/analytics/signals.py
+�^C[?2004l[?2004h[?2004l
+[?2004h[0;32m@topmcon [1;31m➜ [1;34m/workspaces/certus [0;36m([1;31mfeat/p2.9-signals[0;36m) [0m$ [7mcertus/analytics/signals.py[27m
+[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Ccertus/analytics/signals.py
+[A
+[?2004lbash: certus/analytics/signals.py: Permission denied
