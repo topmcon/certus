@@ -24,7 +24,9 @@ jobs:
 
       - name: Create .env if missing (no secrets)
         run: |
-          [ -f .env ] || cp .env.example .env || true
+          if [ ! -f .env ]; then
+            echo "CERTUS_PAUSED=false" > .env
+          fi
 
       - name: Run verification
         run: bash scripts/verify_all.sh
