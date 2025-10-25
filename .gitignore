@@ -10,3 +10,7 @@ logs/
 certus.egg-info/
 db/
 
+
+# Certus backups & DB
+backups/*.zip
+data/*.duckdb
