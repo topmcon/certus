@@ -1,3 +1,13 @@
+if grep -q '^CERTUS_PAUSED=true' .env 2>/dev/null; then
+  echo "[Certus] ⚠️ System paused — skipping smoke check."
+  exit 0
+fi
+#!/usr/bin/env python
+from certus.utils.pause_guard import guard_pause
+guard_pause()
+
+import duckdb
+import logging
 # scripts/calc_indicators.py
 from __future__ import annotations
 import duckdb, logging

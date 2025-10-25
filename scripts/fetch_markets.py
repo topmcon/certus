@@ -1,3 +1,10 @@
+#!/usr/bin/env python
+from certus.utils.pause_guard import guard_pause
+guard_pause()
+
+import os
+import logging
+# ... rest of your imports and logic
 #!/usr/bin/env python3
 """
 Certus Market Fetcher — Pro-ready, parallel, schema-safe, rich fields.
