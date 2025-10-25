@@ -14,3 +14,7 @@ db/
 # Certus backups & DB
 backups/*.zip
 data/*.duckdb
+
+# Certus large/local files
+backups/*.zip
+data/*.duckdb
