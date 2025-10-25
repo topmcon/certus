@@ -17,10 +17,14 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install deps
+      - name: Install deps (CI-safe)
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          # install everything except torch from requirements
+          sed -E '/^torch==/d' requirements.txt > req-ci.txt
+          pip install -r req-ci.txt
+          # install torch CPU wheel from the official index (best-effort)
+          pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu || true
 
       - name: Create .env if missing (no secrets)
         run: |
