@@ -18,6 +18,9 @@ def main():
     run("python scripts/ingest_quotes.py")
     run("python scripts/run_migrations.py")
 
+    # NEW: append a time-series snapshot point
+    run("python scripts/snapshot_quotes_ts.py")
+
     con = duckdb.connect("data/markets.duckdb")
     con.execute("DROP TABLE IF EXISTS trend_feed_snap;")
     con.execute("CREATE TABLE trend_feed_snap AS SELECT * FROM trend_feed_enriched;")

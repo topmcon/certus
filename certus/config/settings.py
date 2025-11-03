@@ -52,6 +52,7 @@ class _Settings:
     duckdb_path: str = os.getenv("DUCKDB_PATH", str(Path(data_dir) / "certus.duckdb"))
 
     # CoinGecko
+    # Read CoinGecko API key from environment (optional). If present, default to pro API base.
     COINGECKO_API_KEY: str | None = os.getenv("COINGECKO_API_KEY")
     COINGECKO_BASE_URL: str = os.getenv(
         "COINGECKO_BASE_URL",
