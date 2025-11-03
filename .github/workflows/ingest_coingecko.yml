@@ -16,6 +16,10 @@ jobs:
       - run: cp .env.example .env
       - run: python -m certus.ingestion.ingest_coingecko --symbols BTC,ETH,SOL --vs USD --top 50 --dest duckdb,parquet
         env:
+          # Provide both the historical secret name (CG_API_KEY) and the
+          # canonical name used by the code (COINGECKO_API_KEY) so workflows
+          # remain compatible with existing repo secrets.
+          COINGECKO_API_KEY: ${{ secrets.CG_API_KEY }}
           CG_API_KEY: ${{ secrets.CG_API_KEY }}
           CG_BASE_URL: ${{ secrets.CG_BASE_URL }}
       - name: Commit data artifacts
