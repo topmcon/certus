@@ -1,0 +1,29 @@
+name: Check External APIs
+on:
+  workflow_dispatch:
+
+jobs:
+  api-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install minimal dependencies
+        # install only the packages required by scripts/action_check_apis.py
+        run: pip install httpx
+      - name: Run API checks
+        env:
+          COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+          ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          CRYPTOPANIC_API_KEY: ${{ secrets.CRYPTOPANIC_API_KEY }}
+          COINMARKETCAL_API_KEY: ${{ secrets.COINMARKETCAL_API_KEY }}
+        run: |
+          python scripts/action_check_apis.py
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-check-results
+          path: results/api_check.json
