@@ -1,0 +1,129 @@
+[
+  {
+    "id": 302494,
+    "title": {
+      "en": "Binance Listing"
+    },
+    "coins": [
+      {
+        "id": "kite-2",
+        "name": "Kite",
+        "rank": 315,
+        "symbol": "KITE",
+        "fullname": "Kite (KITE)"
+      }
+    ],
+    "date_event": "2025-11-03T00:00:00Z",
+    "can_occur_before": false,
+    "created_date": "2025-11-02T03:57:02Z",
+    "displayed_date": "03 Nov 2025",
+    "description": {
+      "en": "Binance lists KITE AI (@GoKiteAI) with KITE/USDT, KITE/USDC, KITE/BNB and KITE/TRY pairs at 1 PM UTC."
+    },
+    "percentage": 92.307692307692,
+    "is_trending": true,
+    "is_hot": false,
+    "is_popular": true,
+    "is_significant": false,
+    "trending_index": 51.5,
+    "popular_index": 77,
+    "influential_score": 7.08,
+    "catalyst_score": 9.33,
+    "categories": [
+      {
+        "id": 4,
+        "name": "Exchange"
+      }
+    ],
+    "vote_count": 13,
+    "view_count": 128,
+    "original_source": "https://www.binance.com/en/support/announcement/detail/48da65d095eb44e093d856948552c402",
+    "proof": "https://d32bfp67k1q0s7.cloudfront.net/3c983c6205b2b4a9bc86473462610170.png",
+    "source": "https://coinmarketcal.com/event/binance-listing-302494"
+  },
+  {
+    "id": 300340,
+    "title": {
+      "en": "Mainnet Upgrade"
+    },
+    "coins": [
+      {
+        "id": "sonic-3",
+        "name": "Sonic",
+        "rank": 128,
+        "symbol": "S",
+        "fullname": "Sonic (S)"
+      }
+    ],
+    "date_event": "2025-11-03T00:00:00Z",
+    "can_occur_before": false,
+    "created_date": "2025-10-23T06:16:21Z",
+    "displayed_date": "03 Nov 2025",
+    "description": {
+      "en": "Sonic upgrades its mainnet to be compatible with Pectra at 3 PM CET."
+    },
+    "percentage": 91.666666666667,
+    "is_trending": true,
+    "is_hot": false,
+    "is_popular": true,
+    "is_significant": false,
+    "trending_index": 11,
+    "popular_index": 33.5,
+    "influential_score": 6.35,
+    "catalyst_score": 8.13,
+    "categories": [
+      {
+        "id": 1,
+        "name": "Release"
+      }
+    ],
+    "vote_count": 12,
+    "view_count": 65,
+    "original_source": "https://x.com/SonicLabs/status/1981103007443145066",
+    "proof": "https://d32bfp67k1q0s7.cloudfront.net/33373632316462352d373833362d346361352d383637312d346562656632643864376334.png",
+    "source": "https://coinmarketcal.com/event/mainnet-upgrade-300340"
+  },
+  {
+    "id": 302048,
+    "title": {
+      "en": "Horizen Darkswap AMA"
+    },
+    "coins": [
+      {
+        "id": "horizen",
+        "name": "Horizen",
+        "rank": 180,
+        "symbol": "ZEN",
+        "fullname": "Horizen (ZEN)"
+      }
+    ],
+    "date_event": "2025-11-03T00:00:00Z",
+    "can_occur_before": false,
+    "created_date": "2025-10-30T18:51:50Z",
+    "displayed_date": "03 Nov 2025",
+    "description": {
+      "en": "\"... Horizen L3 \u2192 gearing up for mainnet on Base \u2022 Darkswap \u2192 entering its mainnet arc this Q4,\" with @singularityzk at 1:30 PM UTC."
+    },
+    "percentage": 100,
+    "is_trending": true,
+    "is_hot": false,
+    "is_popular": true,
+    "is_significant": false,
+    "trending_index": 11.5,
+    "popular_index": 27.5,
+    "influential_score": 4.91,
+    "catalyst_score": 4.61,
+    "categories": [
+      {
+        "id": 9,
+        "name": "AMA"
+      }
+    ],
+    "vote_count": 4,
+    "view_count": 47,
+    "alert_count": 523,
+    "original_source": "https://x.com/horizenglobal/status/1983901135854256625",
+    "proof": "https://d32bfp67k1q0s7.cloudfront.net/c182e89d165fb964a5ec6bd091361409.png",
+    "source": "https://coinmarketcal.com/event/horizen-darkswap-ama-302048"
+  }
+]

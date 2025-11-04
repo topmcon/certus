@@ -29,4 +29,5 @@ jobs:
           fi
 
       - name: Run verification
-        run: bash scripts/verify_all.sh
+        # Run the CI-friendly API checker which writes results/api_check.json
+        run: python -u scripts/action_check_apis.py

@@ -1,35 +1,9 @@
-mkdir -p .github/workflows
-cat > .github/workflows/certus-verify.yml <<'YAML'
-name: Certus Verify
+#!/usr/bin/env bash
+set -euo pipefail
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: "0 3 * * *"  # 03:00 UTC daily
+# CI/local wrapper for the action-friendly API check script.
+# This previously regenerated the GitHub workflow file which caused
+# confusing behavior in CI. Instead, invoke the checker directly.
 
-jobs:
-  verify:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+python -u scripts/action_check_apis.py
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Create .env if missing (no secrets)
-        run: |
-          if [ ! -f .env ]; then
-            echo "CERTUS_PAUSED=false" > .env
-          fi
-
-      - name: Run verification
-        run: bash scripts/verify_all.sh
-YAML
