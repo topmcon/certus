@@ -28,21 +28,6 @@ SERVICES = [
         "required": False,
     },
     {
-        "name": "AlphaVantage",
-        "env": "ALPHAVANTAGE_API_KEY",
-        "required": True,
-    },
-    {
-        "name": "Finnhub",
-        "env": "FINNHUB_API_KEY",
-        "required": True,
-    },
-    {
-        "name": "Cryptopanic",
-        "env": "CRYPTOPANIC_API_KEY",
-        "required": True,
-    },
-    {
         "name": "CoinMarketCal",
         "env": "COINMARKETCAL_API_KEY",
         "required": True,
@@ -80,39 +65,6 @@ async def check_coingecko(key: str | None) -> Dict[str, Any]:
         return {"ok": False, "error": str(e)}
 
 
-def check_alphavantage(key: str) -> Dict[str, Any]:
-    base = "https://www.alphavantage.co/query"
-    params = {"function": "GLOBAL_QUOTE", "symbol": "IBM", "apikey": key}
-    try:
-        r = httpx.get(base, params=params, timeout=20.0)
-        r.raise_for_status()
-        return {"ok": True, "status_code": r.status_code}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-
-def check_finnhub(key: str) -> Dict[str, Any]:
-    base = "https://finnhub.io/api/v1/quote"
-    params = {"symbol": "AAPL", "token": key}
-    try:
-        r = httpx.get(base, params=params, timeout=15.0)
-        r.raise_for_status()
-        return {"ok": True, "status_code": r.status_code}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-
-def check_cryptopanic(key: str) -> Dict[str, Any]:
-    base = "https://cryptopanic.com/api/developer/v2/posts/"
-    params = {"auth_token": key, "public": "true", "page": 1}
-    try:
-        r = httpx.get(base, params=params, timeout=15.0)
-        r.raise_for_status()
-        return {"ok": True, "status_code": r.status_code}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-
 def check_coinmarketcal(key: str) -> Dict[str, Any]:
     base = "https://developers.coinmarketcal.com/v1/events"
     headers = {"x-api-key": key, "Accept": "application/json"}
@@ -145,12 +97,6 @@ async def main() -> int:
         try:
             if name == "CoinGecko":
                 r = await check_coingecko(key)
-            elif name == "AlphaVantage":
-                r = check_alphavantage(key)
-            elif name == "Finnhub":
-                r = check_finnhub(key)
-            elif name == "Cryptopanic":
-                r = check_cryptopanic(key)
             elif name == "CoinMarketCal":
                 r = check_coinmarketcal(key)
             else:
