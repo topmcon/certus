@@ -1,0 +1,2 @@
+keep_paths.txt
+to_delete.txt
