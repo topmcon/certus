@@ -1,0 +1,17 @@
+{
+  "services": {
+    "CoinGecko": {
+      "ok": true,
+      "detail": "dict",
+      "required": false
+    },
+    "CoinMarketCal": {
+      "ok": true,
+      "status_code": 200,
+      "required": true
+    }
+  },
+  "summary": {
+    "required_failed": 0
+  }
+}

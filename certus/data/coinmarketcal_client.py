@@ -20,7 +20,13 @@ class CoinMarketCalClient:
     def __init__(self, timeout: float = 20.0):
         self.base_url = os.getenv("COINMARKETCAL_BASE_URL", "https://developers.coinmarketcal.com/api")
         # The public developer path used in older code is /v1/events
-        self._client = httpx.AsyncClient(base_url=self.base_url, timeout=timeout)
+        # If an API key is provided via COINMARKETCAL_API_KEY, include it in default headers
+        api_key = os.getenv("COINMARKETCAL_API_KEY")
+        default_headers = {"Accept": "application/json"}
+        if api_key:
+            # CoinMarketCal expects the key in the `x-api-key` header for developer API
+            default_headers["x-api-key"] = api_key
+        self._client = httpx.AsyncClient(base_url=self.base_url, timeout=timeout, headers=default_headers)
 
     async def close(self) -> None:
         await self._client.aclose()
