@@ -30,6 +30,25 @@ try:
 except Exception as e:
     print("✖ CoinGecko check failed:", e); sys.exit(1)
 
+# CoinMarketCap ping
+try:
+    from certus.data.coinmarketcap_client import CoinMarketCapClient
+    import asyncio as _asyncio
+
+    async def _ping_cmc():
+        async with CoinMarketCapClient(timeout=10.0) as cmc:
+            r = await cmc.ping()
+            # print a tiny summary rather than the full payload
+            if isinstance(r, dict) and 'status' in r:
+                print('CoinMarketCap ping status:', r.get('status'))
+            else:
+                print('CoinMarketCap ping:', type(r))
+
+    _asyncio.run(_ping_cmc())
+    print("✔ CoinMarketCap reachable")
+except Exception as e:
+    print("✖ CoinMarketCap check failed:", e); # don't exit here to allow DuckDB checks to run
+
 # DuckDB open + markets table
 try:
     import duckdb
