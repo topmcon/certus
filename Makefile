@@ -17,6 +17,10 @@ api:
 	@echo "Run API locally (requires deps)"
 	uvicorn apps.api.main:app --reload --host 0.0.0.0 --port 8000
 
+api-small:
+	@echo "Run small API app for CoinGecko/CoinMarketCal"
+	uvicorn apps.api_small.main:app --reload --host 0.0.0.0 --port 8001
+
 install:
 	python -m pip install --upgrade pip
 	pip install -r requirements.txt
