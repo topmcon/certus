@@ -63,7 +63,11 @@ run: indicators scores signals
 
 smoke:
 	@echo "== Smoke check =="
-	bash scripts/p29_run.sh
+	python3 run_smoke.py
+
+check-apis:
+	@echo "== Run API checker =="
+	set -a; source .env; set +a; python3 scripts/action_check_apis.py
 
 debug:
 	@echo "== Debug trace =="
