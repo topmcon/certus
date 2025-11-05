@@ -34,15 +34,20 @@ except Exception as e:
 try:
     from certus.data.coinmarketcap_client import CoinMarketCapClient
     import asyncio as _asyncio
-
     async def _ping_cmc():
-        async with CoinMarketCapClient(timeout=10.0) as cmc:
+        cmc = CoinMarketCapClient(timeout=10.0)
+        try:
             r = await cmc.ping()
             # print a tiny summary rather than the full payload
             if isinstance(r, dict) and 'status' in r:
                 print('CoinMarketCap ping status:', r.get('status'))
             else:
-                print('CoinMarketCap ping:', type(r))
+                print('CoinMarketCap ping: <response present>')
+        finally:
+            try:
+                await cmc.close()
+            except Exception:
+                pass
 
     _asyncio.run(_ping_cmc())
     print("✔ CoinMarketCap reachable")
