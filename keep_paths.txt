@@ -1,0 +1,16 @@
+.gitignore
+Makefile
+README.md
+pyproject.toml
+requirements.txt
+scripts/action_check_apis.py
+scripts/fetch_markets.py
+certus/data/coingecko_client.py
+certus/data/fetch_markets.py
+certus/ingestion/ingest_coingecko.py
+data/cg_markets_page1.json
+data/cg_markets_page1_trimmed.json
+data/coinmarketcal_events_page1.json
+data/coinmarketcal_events_trimmed.json
+data/certus.duckdb
+data/markets.duckdb
