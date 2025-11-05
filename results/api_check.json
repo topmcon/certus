@@ -1,0 +1,36 @@
+{
+  "services": {
+    "CoinGecko": {
+      "ok": true,
+      "skipped": true,
+      "required": false
+    },
+    "AlphaVantage": {
+      "ok": false,
+      "skipped": false,
+      "error": "Missing env: ALPHAVANTAGE_API_KEY",
+      "required": true
+    },
+    "Finnhub": {
+      "ok": false,
+      "skipped": false,
+      "error": "Missing env: FINNHUB_API_KEY",
+      "required": true
+    },
+    "Cryptopanic": {
+      "ok": false,
+      "skipped": false,
+      "error": "Missing env: CRYPTOPANIC_API_KEY",
+      "required": true
+    },
+    "CoinMarketCal": {
+      "ok": false,
+      "skipped": false,
+      "error": "Missing env: COINMARKETCAL_API_KEY",
+      "required": true
+    }
+  },
+  "summary": {
+    "required_failed": 4
+  }
+}
